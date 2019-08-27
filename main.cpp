@@ -6,7 +6,7 @@
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
 
-int alarmQueue = 1000;
+int alarmQueue = 6700;
 int badRecFail = 10;
 int badRecCount = 0;
 
@@ -247,10 +247,10 @@ bool checkScreen(int x, int y, int width, int height)
 		return false;
 	std::string preprocessed_file = tesseract_preprocess("C:/test.png");
 	std::string ocr_result = tesseract_ocr(preprocessed_file);
-	int queueNo = alarmQueue * 10;
+	int queueNo = INT_MAX;
 	try
 	{
-		int queueNo = std::stoi(ocr_result);
+		queueNo = std::stoi(ocr_result);
 		badRecCount = 0;
 		std::cout << queueNo << std::endl;
 	}
