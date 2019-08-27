@@ -6,28 +6,50 @@ This software is provided as-is - seriously, it was written on a whim at 2 in th
 
 # Usage
 Usage: WOWQueueCamper [options]
+
 Options:
+
   --rleft arg           x value of farthest left pixel on fullscreen.Requires
+  
                         other r parameters, default 1035
+                        
   --rbottom arg         y value of farthest bottom pixel on fullscreen.Requires
+  
                         other r parameters, default 492
+                        
   --rwidth arg          width of x values of farthest left pixel to farthest
+  
                         right pixel on fullscreen. Requires other r parameters,
+                        
                         default 75
+                        
   --rheight arg         height of y values of farthest left pixel to farthest
+  
                         right pixel on fullscreen.Requires other r parameters,
+                        
                         default 30
+                        
   --rheight arg         height of y values of farthest left pixel to farthest
+  
                         right pixel on fullscreen.Requires other r parameters,
+                        
                         default 30
   --alarm_number arg    Amount of players in queue to trigger alarm. default
+  
                         1000
+                        
   --start_delay arg     Time before running program to allow time to switch to
+  
                         WOW queue in ms. default 10000
+                        
   --check_delay arg     Time between checking queue in ms. default 1000
+  
   --alarm_file arg      Absolute path to wav file to play for alarm. default
+  
                         fire truck air horn
+                        
   -h [ --help ]         Prints help menu
+  
   
 rleft, rbottom, rwidth, and rheight are used together to set a custom rectangle to find the queue number in. This program defaults to 1920x1080 resolution where WOW is fullscreened. I suggest using an image manipulation program, like https://www.gimp.org/ to figure out what rectangle that you need.
 
