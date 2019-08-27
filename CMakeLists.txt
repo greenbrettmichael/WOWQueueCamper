@@ -12,5 +12,4 @@ add_custom_command(
         TARGET WOWQueueCamper POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 "${CMAKE_SOURCE_DIR}/eng.traineddata"
-                "${CMAKE_CURRENT_BINARY_DIR}/eng.traineddata")
-set(ENV{TESSDATA_PREFIX} "${CMAKE_CURRENT_BINARY_DIR}/tessdata")
+                "${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/tessdata/eng.traineddata")

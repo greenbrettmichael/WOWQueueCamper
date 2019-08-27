@@ -5,10 +5,12 @@
 #pragma comment(lib, "winmm.lib")
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
+#include <filesystem>
 
 int alarmQueue = 6700;
 int badRecFail = 10;
 int badRecCount = 0;
+int startDelayMS = 1000;
 
 /* https://github.com/vtempest/tesseract-ocr-sample/blob/master/tesseract-sample/tesseract_sample.cpp */
 std::string tesseract_preprocess(std::string source_file) {
@@ -79,13 +81,21 @@ std::string tesseract_ocr(std::string preprocessed_file)
 	char* outText;
 	Pix* image = pixRead(preprocessed_file.c_str());
 	tesseract::TessBaseAPI* api = new tesseract::TessBaseAPI();
-	TCHAR CurDir[MAX_PATH];
-	GetCurrentDirectory(MAX_PATH, CurDir);
-	api->Init(CurDir, "eng");
+	HMODULE hModule = GetModuleHandleW(NULL);
+	WCHAR path[MAX_PATH];
+	GetModuleFileNameW(hModule, path, MAX_PATH);
+	char exePath[MAX_PATH];
+	wcstombs(exePath, path, MAX_PATH);
+	std::filesystem::path tessDataPath(exePath);
+	tessDataPath = tessDataPath.parent_path();
+	tessDataPath /= "tessdata";
+	api->Init(tessDataPath.string().c_str(), "eng");
 	api->SetPageSegMode(tesseract::PSM_SINGLE_LINE);
 	api->SetImage(image);
 	outText = api->GetUTF8Text();
 	std::string out(outText);
+	delete api;
+	delete image;
 	return out;
 }
 
@@ -264,7 +274,7 @@ bool checkScreen(int x, int y, int width, int height)
 
 int main()
 {
-	Sleep(100);
+	Sleep(startDelayMS);
 	std::cout << "Starting the WOWQueueCamper! Waiting for queue to reach " << alarmQueue << std::endl;
 	RECT screenRect;
 	const HWND hDesktop = GetDesktopWindow();
