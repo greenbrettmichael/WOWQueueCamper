@@ -1,3 +1,3 @@
 mkdir build
 cd build
-cmake ..
+cmake .. "-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
