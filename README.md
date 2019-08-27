@@ -1,5 +1,7 @@
 # WOWQueueCamper
-Wakes you up when queue is ready
+Wakes you up when queue is ready. 
+
+video tutorial here  https://www.youtube.com/watch?v=xKz3pMvtXlY
 
 # Disclaimer
 This software is provided as-is - seriously, it was written on a whim at 2 in the morning. If you have an issue using the software please search your issue in "Issues" and create a new issue if no match can be found. This repository provides a pre-built binary for ease of use, please be wary of running any .exe files distributed from an unofficial source, such as a forum.
