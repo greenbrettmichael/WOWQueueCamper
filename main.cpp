@@ -17,10 +17,10 @@ std::string tesseract_preprocess(std::string source_file) {
 	strcat_s(tempPath, "test2.png");
 	char preprocessed_file[MAX_PATH];
 	strcpy_s(preprocessed_file, tempPath);
-	BOOL perform_negate = TRUE;
-	l_float32 dark_bg_threshold = 0.5f; // From 0.0 to 1.0, with 0 being all white and 1 being all black 
+	BOOL perform_negate = FALSE;
+	l_float32 dark_bg_threshold = 0.75f; // From 0.0 to 1.0, with 0 being all white and 1 being all black 
 	int perform_scale = 1;
-	l_float32 scale_factor = 3.5f;
+	l_float32 scale_factor = 10.0f;
 	int perform_unsharp_mask = 1;
 	l_int32 usm_halfwidth = 5;
 	l_float32 usm_fract = 2.5f;
@@ -82,7 +82,7 @@ std::string tesseract_ocr(std::string preprocessed_file)
 	TCHAR CurDir[MAX_PATH];
 	GetCurrentDirectory(MAX_PATH, CurDir);
 	api->Init(CurDir, "eng");
-	api->SetPageSegMode(tesseract::PSM_AUTO);
+	api->SetPageSegMode(tesseract::PSM_SINGLE_LINE);
 	api->SetImage(image);
 	outText = api->GetUTF8Text();
 	std::string out(outText);
@@ -251,15 +251,12 @@ bool checkScreen(int x, int y, int width, int height)
 	try
 	{
 		int queueNo = std::stoi(ocr_result);
+		badRecCount = 0;
 		std::cout << queueNo << std::endl;
 	}
 	catch (...)
 	{
-		if (badRecCount++ > badRecFail)
-		{
-			std::cout << "WOWQueueCamper Reading Wrong Location, Read " << ocr_result << std::endl;
-			exit(1);
-		}
+		badRecCount++;
 		std::cout << ocr_result << std::endl;
 	}
 	return queueNo < alarmQueue;
@@ -267,16 +264,18 @@ bool checkScreen(int x, int y, int width, int height)
 
 int main()
 {
+	Sleep(100);
+	std::cout << "Starting the WOWQueueCamper! Waiting for queue to reach " << alarmQueue << std::endl;
 	RECT screenRect;
 	const HWND hDesktop = GetDesktopWindow();
 	GetWindowRect(hDesktop, &screenRect);
 	int width = screenRect.right;
 	int height = screenRect.bottom;
-	int baseW = .538 * width;
+	int baseW = .539 * width;
 	int baseH = .455 * height;
 	int rwidth = (.578 * width) - baseW;
 	int rheight = (.483 * height) - baseH;
-	while (!checkScreen(baseW, baseH, rwidth, rheight))
+	while (!checkScreen(baseW, baseH, rwidth, rheight) && badRecCount < badRecFail)
 	{
 		Sleep(1000);
 	}
