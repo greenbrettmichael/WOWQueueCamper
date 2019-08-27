@@ -6,6 +6,10 @@
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
 
+int alarmQueue = 1000;
+int badRecFail = 10;
+int badRecCount = 0;
+
 /* https://github.com/vtempest/tesseract-ocr-sample/blob/master/tesseract-sample/tesseract_sample.cpp */
 std::string tesseract_preprocess(std::string source_file) {
 	char tempPath[128];
@@ -243,12 +247,36 @@ bool checkScreen(int x, int y, int width, int height)
 		return false;
 	std::string preprocessed_file = tesseract_preprocess("C:/test.png");
 	std::string ocr_result = tesseract_ocr(preprocessed_file);
-	return true;
+	int queueNo = alarmQueue * 10;
+	try
+	{
+		int queueNo = std::stoi(ocr_result);
+		std::cout << queueNo << std::endl;
+	}
+	catch (...)
+	{
+		if (badRecCount++ > badRecFail)
+		{
+			std::cout << "WOWQueueCamper Reading Wrong Location, Read " << ocr_result << std::endl;
+			exit(1);
+		}
+		std::cout << ocr_result << std::endl;
+	}
+	return queueNo < alarmQueue;
 }
 
 int main()
 {
-	while (!checkScreen(0, 0, 1920, 1080))
+	RECT screenRect;
+	const HWND hDesktop = GetDesktopWindow();
+	GetWindowRect(hDesktop, &screenRect);
+	int width = screenRect.right;
+	int height = screenRect.bottom;
+	int baseW = .538 * width;
+	int baseH = .455 * height;
+	int rwidth = (.578 * width) - baseW;
+	int rheight = (.483 * height) - baseH;
+	while (!checkScreen(baseW, baseH, rwidth, rheight))
 	{
 		Sleep(1000);
 	}
