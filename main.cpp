@@ -13,12 +13,7 @@ int badRecCount = 0;
 int startDelayMS = 1000;
 
 /* https://github.com/vtempest/tesseract-ocr-sample/blob/master/tesseract-sample/tesseract_sample.cpp */
-std::string tesseract_preprocess(std::string source_file) {
-	char tempPath[128];
-	GetTempPathA(128, tempPath);
-	strcat_s(tempPath, "test2.png");
-	char preprocessed_file[MAX_PATH];
-	strcpy_s(preprocessed_file, tempPath);
+bool tesseract_preprocess(std::string source_file, std::string procFile) {
 	BOOL perform_negate = FALSE;
 	l_float32 dark_bg_threshold = 0.75f; // From 0.0 to 1.0, with 0 being all white and 1 being all black 
 	int perform_scale = 1;
@@ -37,6 +32,10 @@ std::string tesseract_preprocess(std::string source_file) {
 	PIX* pixs = NULL;
 	char* ext = NULL;
 	pixs = pixRead(source_file.c_str());
+	if (!pixs)
+	{
+		return false;
+	}
 	pixs = pixConvertRGBToGray(pixs, 0.0f, 0.0f, 0.0f);
 	if (perform_negate)
 	{
@@ -44,7 +43,7 @@ std::string tesseract_preprocess(std::string source_file) {
 		status = pixOtsuAdaptiveThreshold(pixs, otsu_sx, otsu_sy, otsu_smoothx, otsu_smoothy, otsu_scorefract, NULL, &otsu_pixs);
 		if (!otsu_pixs)
 		{
-			return "";
+			return false;
 		}
 		border_avg = pixAverageOnLine(otsu_pixs, 0, 0, otsu_pixs->w - 1, 0, 1);                               // Top 
 		border_avg += pixAverageOnLine(otsu_pixs, 0, otsu_pixs->h - 1, otsu_pixs->w - 1, otsu_pixs->h - 1, 1); // Bottom 
@@ -70,9 +69,7 @@ std::string tesseract_preprocess(std::string source_file) {
 	{
 		status = pixOtsuAdaptiveThreshold(pixs, otsu_sx, otsu_sy, otsu_smoothx, otsu_smoothy, otsu_scorefract, NULL, &pixs);
 	}
-	status = pixWriteImpliedFormat(preprocessed_file, pixs, 0, 0);
-	std::string out(preprocessed_file);
-	return out;
+	status = pixWriteImpliedFormat(procFile.c_str(), pixs, 0, 0);
 }
 
 /* https://github.com/vtempest/tesseract-ocr-sample/blob/master/tesseract-sample/tesseract_sample.cpp */
@@ -216,7 +213,7 @@ int GetEncoderClsid(const WCHAR* format, CLSID* pClsid)
 }
 
 /* https://docs.microsoft.com/en-us/windows/win32/gdiplus/-gdiplus-converting-a-bmp-image-to-a-png-image-use */
-bool ConvertBMPToPNG(char* bmpFile, char* pngFile)
+bool ConvertBMPToPNG(const char* bmpFile, const char* pngFile)
 {
 	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
 	ULONG_PTR gdiplusToken;
@@ -251,12 +248,37 @@ bool ScreenCapture(int x, int y, int width, int height, char* filename) {
 
 bool checkScreen(int x, int y, int width, int height)
 {
-	if (!ScreenCapture(x, y, width, height, "C:\\test.bmp"))
+	struct TempPaths
+	{
+		~TempPaths()
+		{
+			std::filesystem::remove_all(tmpDir);
+		}
+		std::filesystem::path tmpDir;
+		std::filesystem::path bmpFile;
+		std::filesystem::path pngFile;
+		std::filesystem::path procFile;
+	};
+	badRecCount++;
+	TempPaths workingImages;
+	workingImages.tmpDir = std::filesystem::temp_directory_path();
+	workingImages.tmpDir /= "WOWQueueCamper";
+	std::filesystem::create_directory(workingImages.tmpDir);
+	workingImages.bmpFile = workingImages.tmpDir;
+	workingImages.bmpFile /= "color.bmp";
+	workingImages.pngFile = workingImages.tmpDir;
+	workingImages.pngFile /= "color.png";
+	workingImages.procFile = workingImages.tmpDir;
+	workingImages.procFile /= "bw.png";
+	if (!ScreenCapture(x, y, width, height, strdup(workingImages.bmpFile.string().c_str())))
 		return false;
-	if (!ConvertBMPToPNG("C:\\test.bmp", "C:\\test.png"))
+	if (!ConvertBMPToPNG(workingImages.bmpFile.string().c_str(), workingImages.pngFile.string().c_str()))
 		return false;
-	std::string preprocessed_file = tesseract_preprocess("C:/test.png");
-	std::string ocr_result = tesseract_ocr(preprocessed_file);
+	if (!tesseract_preprocess(workingImages.pngFile.string(), workingImages.procFile.string()))
+	{
+		return false;
+	}
+	std::string ocr_result = tesseract_ocr(workingImages.procFile.string());
 	int queueNo = INT_MAX;
 	try
 	{
@@ -266,8 +288,7 @@ bool checkScreen(int x, int y, int width, int height)
 	}
 	catch (...)
 	{
-		badRecCount++;
-		std::cout << ocr_result << std::endl;
+		std::cout << "BAD READ: " << ocr_result << std::endl;
 	}
 	return queueNo < alarmQueue;
 }

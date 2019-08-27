@@ -3,6 +3,7 @@ project(WOWQueueCamper)
 find_package(Tesseract CONFIG REQUIRED)
 add_executable(WOWQueueCamper main.cpp)
 target_link_libraries(WOWQueueCamper PRIVATE libtesseract)
+set_target_properties(WOWQueueCamper PROPERTIES CXX_STANDARD 17)
 add_custom_command(
         TARGET WOWQueueCamper POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
