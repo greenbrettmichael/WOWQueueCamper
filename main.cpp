@@ -6,11 +6,19 @@
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
 #include <filesystem>
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
 
-int alarmQueue = 6700;
+int alarmQueue = 1000;
 int badRecFail = 10;
 int badRecCount = 0;
-int startDelayMS = 1000;
+int startDelayMS = 10000;
+int checkDelayMS = 1000;
+int rleft = 1035;
+int rbottom = 492;
+int rwidth = 75;
+int rheight = 30;
+std::string alarmPath = std::string("default.wav");
 
 /* https://github.com/vtempest/tesseract-ocr-sample/blob/master/tesseract-sample/tesseract_sample.cpp */
 bool tesseract_preprocess(std::string source_file, std::string procFile) {
@@ -245,7 +253,6 @@ bool ScreenCapture(int x, int y, int width, int height, char* filename) {
 	return ret;
 }
 
-
 bool checkScreen(int x, int y, int width, int height)
 {
 	struct TempPaths
@@ -293,23 +300,115 @@ bool checkScreen(int x, int y, int width, int height)
 	return queueNo < alarmQueue;
 }
 
-int main()
+void printHelp(po::options_description const& options)
 {
+	std::cout << "Usage: WOWQueueCamper [options]" << std::endl;
+	std::cout << options;
+}
+
+/* https://stackoverflow.com/questions/38289101/boost-program-options-dependent-options */
+void option_dependency(const boost::program_options::variables_map& vm,
+	const std::string& for_what, const std::string& required_option)
+{
+	if (vm.count(for_what) && !vm[for_what].defaulted())
+		if (vm.count(required_option) == 0 || vm[required_option].defaulted())
+			throw std::logic_error(std::string("Option '") + for_what
+				+ "' requires option '" + required_option + "'.");
+}
+
+int main(int argc, const char* argv[])
+{
+	po::options_description options("Options");
+	options.add_options()
+		("rleft", po::value<int>(), "x value of farthest left pixel on fullscreen.Requires other r parameters, default 1035")
+		("rbottom", po::value<int>(), "y value of farthest bottom pixel on fullscreen.Requires other r parameters, default 492")
+		("rwidth", po::value<int>(), "width of x values of farthest left pixel to farthest right pixel on fullscreen. Requires other r parameters, default 75")
+		("rheight", po::value<int>(), "height of y values of farthest left pixel to farthest right pixel on fullscreen.Requires other r parameters, default 30")
+		("rheight", po::value<int>(), "height of y values of farthest left pixel to farthest right pixel on fullscreen.Requires other r parameters, default 30")
+		("alarm_number", po::value<int>(), "Amount of players in queue to trigger alarm. default 1000")
+		("start_delay", po::value<int>(), "Time before running program to allow time to switch to WOW queue in ms. default 10000")
+		("check_delay", po::value<int>(), "Time between checking queue in ms. default 1000")
+		("alarm_file", po::value<std::string>(), "Absolute path to wav file to play for alarm. default fire truck air horn")
+		("help,h", "Prints help menu");
+	po::variables_map vm;
+	po::store(po::parse_command_line(argc, argv, options), vm);
+	option_dependency(vm, "rleft", "rbottom");
+	option_dependency(vm, "rleft", "rwidth");
+	option_dependency(vm, "rleft", "rheight");
+	option_dependency(vm, "rbottom", "rleft");
+	option_dependency(vm, "rbottom", "rwidth");
+	option_dependency(vm, "rbottom", "rheight");
+	option_dependency(vm, "rwidth", "rleft");
+	option_dependency(vm, "rwidth", "rbottom");
+	option_dependency(vm, "rwidth", "rheight");
+	option_dependency(vm, "rheight", "rleft");
+	option_dependency(vm, "rheight", "rbottom");
+	option_dependency(vm, "rheight", "rwidth");
+	if (vm.count("help"))
+	{
+		printHelp(options);
+		return 0;
+	}
+	try
+	{
+		po::notify(vm);
+	}
+	catch (std::exception const& e)
+	{
+		std::cerr << "Bad Arguments: " << e.what() << std::endl;
+		printHelp(options);
+		return 2;
+	}
+	if (vm.count("alarm_number"))
+	{
+		alarmQueue = vm["alarm_number"].as<int>();
+	}
+	if (vm.count("start_delay"))
+	{
+		startDelayMS = vm["start_delay"].as<int>();
+	}
+	if (vm.count("check_delay"))
+	{
+		checkDelayMS = vm["check_delay"].as<int>();
+	}
+	if (vm.count("alarm_file"))
+	{
+		std::filesystem::path alarmFilePath(vm["alarm_file"].as<std::string>());
+		if (std::filesystem::exists(alarmFilePath) && alarmFilePath.extension() == ".wav")
+		{
+			alarmPath = alarmFilePath.string();
+		}
+		else
+		{
+			std::cout << alarmFilePath.string() << " does not exist or is not a .wav file " << std::endl;
+			return 3;
+		}
+	}
 	Sleep(startDelayMS);
 	std::cout << "Starting the WOWQueueCamper! Waiting for queue to reach " << alarmQueue << std::endl;
-	RECT screenRect;
-	const HWND hDesktop = GetDesktopWindow();
-	GetWindowRect(hDesktop, &screenRect);
-	int width = screenRect.right;
-	int height = screenRect.bottom;
-	int baseW = .539 * width;
-	int baseH = .455 * height;
-	int rwidth = (.578 * width) - baseW;
-	int rheight = (.483 * height) - baseH;
-	while (!checkScreen(baseW, baseH, rwidth, rheight) && badRecCount < badRecFail)
+	if (vm.count("rleft") && vm.count("rbottom") && vm.count("rwidth") && vm.count("rheight"))
 	{
-		Sleep(1000);
+		rleft = vm["rleft"].as<int>();
+		rbottom = vm["rbottom"].as<int>();
+		rwidth = vm["rwidth"].as<int>();
+		rheight = vm["rheight"].as<int>();
 	}
-	PlaySound("default.wav", NULL, SND_SYNC);
+	else
+	{
+		RECT screenRect;
+		const HWND hDesktop = GetDesktopWindow();
+		GetWindowRect(hDesktop, &screenRect);
+		int width = screenRect.right;
+		int height = screenRect.bottom;
+		rleft = .539 * width;
+		rbottom = .455 * height;
+		rwidth = (.578 * width) - rleft;
+		rheight = (.483 * height) - rbottom;
+	}
+	while (!checkScreen(rleft, rbottom, rwidth, rheight) && badRecCount < badRecFail)
+	{
+		Sleep(checkDelayMS);
+	}
+	PlaySound(alarmPath.c_str(), NULL, SND_SYNC);
     return 0;
 }
