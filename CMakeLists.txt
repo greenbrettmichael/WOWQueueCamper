@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.4)
 project(WOWQueueCamper)
 find_package(Tesseract CONFIG REQUIRED)
+find_package(opencv CONFIG REQUIRED)
 find_package(Boost COMPONENTS program_options REQUIRED)
 add_executable(WOWQueueCamper main.cpp)
-target_link_libraries(WOWQueueCamper PRIVATE libtesseract Boost::program_options)
+target_link_libraries(WOWQueueCamper PRIVATE libtesseract opencv_core opencv_highgui Boost::program_options)
 set_target_properties(WOWQueueCamper PROPERTIES CXX_STANDARD 17)
 add_custom_command(
         TARGET WOWQueueCamper POST_BUILD

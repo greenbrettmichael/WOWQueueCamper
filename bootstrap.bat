@@ -3,4 +3,4 @@ cd vcpkg
 git pull
 call bootstrap-vcpkg.bat
 .\vcpkg.exe update
-.\vcpkg.exe install tesseract boost-program-options
+.\vcpkg.exe install tesseract opencv boost-program-options

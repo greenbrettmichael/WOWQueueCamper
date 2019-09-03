@@ -5,6 +5,7 @@
 #pragma comment(lib, "winmm.lib")
 #include <tesseract/baseapi.h>
 #include <leptonica/allheaders.h>
+#include <opencv2/opencv.hpp>
 #include <filesystem>
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
@@ -12,96 +13,88 @@ namespace po = boost::program_options;
 int alarmQueue = 1000;
 int badRecFail = 10;
 int badRecCount = 0;
-int startDelayMS = 10000;
-int checkDelayMS = 1000;
+int startDelayMS = 1000;
+int checkDelayMS = 10000;
 int rleft = 1035;
 int rbottom = 492;
 int rwidth = 75;
 int rheight = 30;
 std::string alarmPath = std::string("default.wav");
+tesseract::TessBaseAPI* api = new tesseract::TessBaseAPI();
 
 /* https://github.com/vtempest/tesseract-ocr-sample/blob/master/tesseract-sample/tesseract_sample.cpp */
 bool tesseract_preprocess(std::string source_file, std::string procFile) {
-	BOOL perform_negate = FALSE;
-	l_float32 dark_bg_threshold = 0.75f; // From 0.0 to 1.0, with 0 being all white and 1 being all black 
-	int perform_scale = 1;
-	l_float32 scale_factor = 10.0f;
-	int perform_unsharp_mask = 1;
-	l_int32 usm_halfwidth = 5;
-	l_float32 usm_fract = 2.5f;
-	int perform_otsu_binarize = 1;
-	l_int32 otsu_sx = 2000;
-	l_int32 otsu_sy = 2000;
-	l_int32 otsu_smoothx = 0;
-	l_int32 otsu_smoothy = 0;
-	l_float32 otsu_scorefract = 0.0f;
-	l_int32 status = 1;
-	l_float32 border_avg = 0.0f;
-	PIX* pixs = NULL;
-	char* ext = NULL;
-	pixs = pixRead(source_file.c_str());
-	if (!pixs)
-	{
-		return false;
-	}
-	pixs = pixConvertRGBToGray(pixs, 0.0f, 0.0f, 0.0f);
-	if (perform_negate)
-	{
-		PIX* otsu_pixs = NULL;
-		status = pixOtsuAdaptiveThreshold(pixs, otsu_sx, otsu_sy, otsu_smoothx, otsu_smoothy, otsu_scorefract, NULL, &otsu_pixs);
-		if (!otsu_pixs)
-		{
-			return false;
-		}
-		border_avg = pixAverageOnLine(otsu_pixs, 0, 0, otsu_pixs->w - 1, 0, 1);                               // Top 
-		border_avg += pixAverageOnLine(otsu_pixs, 0, otsu_pixs->h - 1, otsu_pixs->w - 1, otsu_pixs->h - 1, 1); // Bottom 
-		border_avg += pixAverageOnLine(otsu_pixs, 0, 0, 0, otsu_pixs->h - 1, 1);                               // Left 
-		border_avg += pixAverageOnLine(otsu_pixs, otsu_pixs->w - 1, 0, otsu_pixs->w - 1, otsu_pixs->h - 1, 1); // Right 
-		border_avg /= 4.0f;
-		pixDestroy(&otsu_pixs);
-		if (border_avg > dark_bg_threshold)
-		{
-			pixInvert(pixs, pixs);
-
-		}
-	}
-	if (perform_scale)
-	{
-		pixs = pixScaleGrayLI(pixs, scale_factor, scale_factor);
-	}
-	if (perform_unsharp_mask)
-	{
-		pixs = pixUnsharpMaskingGray(pixs, usm_halfwidth, usm_fract);
-	}
-	if (perform_otsu_binarize)
-	{
-		status = pixOtsuAdaptiveThreshold(pixs, otsu_sx, otsu_sy, otsu_smoothx, otsu_smoothy, otsu_scorefract, NULL, &pixs);
-	}
-	status = pixWriteImpliedFormat(procFile.c_str(), pixs, 0, 0);
+	cv::Mat sourceImg = cv::imread(source_file.c_str(), cv::IMREAD_COLOR);
+	cv::cvtColor(sourceImg, sourceImg, cv::COLOR_BGR2HSV);
+	cv::GaussianBlur(sourceImg, sourceImg, { 5,5 }, 1);
+	cv::Mat yellowMask;
+	cv::inRange(sourceImg, cv::Scalar(15, 100, 100), cv::Scalar(35, 255, 255), yellowMask);
+	cv::bitwise_not(sourceImg, sourceImg, yellowMask);
+	yellowMask = 255 - yellowMask;
+	return cv::imwrite(procFile.c_str(), yellowMask);
 }
 
 /* https://github.com/vtempest/tesseract-ocr-sample/blob/master/tesseract-sample/tesseract_sample.cpp */
-std::string tesseract_ocr(std::string preprocessed_file)
+std::string tesseract_ocr_get_queue(std::string preprocessed_file)
 {
 	char* outText;
 	Pix* image = pixRead(preprocessed_file.c_str());
-	tesseract::TessBaseAPI* api = new tesseract::TessBaseAPI();
-	HMODULE hModule = GetModuleHandleW(NULL);
-	WCHAR path[MAX_PATH];
-	GetModuleFileNameW(hModule, path, MAX_PATH);
-	char exePath[MAX_PATH];
-	wcstombs(exePath, path, MAX_PATH);
-	std::filesystem::path tessDataPath(exePath);
-	tessDataPath = tessDataPath.parent_path();
-	tessDataPath /= "tessdata";
-	api->Init(tessDataPath.string().c_str(), "eng");
 	api->SetPageSegMode(tesseract::PSM_SINGLE_LINE);
 	api->SetImage(image);
-	outText = api->GetUTF8Text();
-	std::string out(outText);
-	delete api;
+	std::string result = std::string(api->GetUTF8Text());
+	tesseract::ResultIterator* ri = api->GetIterator();
+	tesseract::PageIteratorLevel level = tesseract::RIL_WORD;
+	std::string out;
+	if (ri != 0) {
+		do {
+			if (ri->Confidence(level) < 80.f)
+			{
+				continue;
+			}
+			if (ri->WordIsNumeric())
+			{
+				const char* word = ri->GetUTF8Text(level);
+				out.append(std::string(word));
+				delete[] word;
+			}
+		} while (ri->Next(level));
+	}
 	delete image;
 	return out;
+}
+
+bool tesseract_ocr_get_line(std::string preprocessed_file)
+{
+	char* outText;
+	Pix* image = pixRead(preprocessed_file.c_str());
+	api->SetPageSegMode(tesseract::PSM_SPARSE_TEXT);
+	api->SetImage(image);
+	std::string result = std::string(api->GetUTF8Text());
+	tesseract::ResultIterator* ri = api->GetIterator();
+	tesseract::PageIteratorLevel level = tesseract::RIL_TEXTLINE;
+	std::string successLine("Position in queue");
+	bool foundLine = false;
+	int bboxLeft, bboxRight, bboxBottom, bboxTop;
+	if (ri != 0) {
+		do {
+			const char* line = ri->GetUTF8Text(level);
+			std::string lineStr(line);
+			if (lineStr.find(successLine) != std::string::npos) {
+				foundLine = true;
+				ri->BoundingBox(level, &bboxLeft, &bboxTop, &bboxRight, &bboxBottom);
+			}
+			delete[] line;
+		} while (ri->Next(level) && !foundLine);
+	}
+	if (foundLine)
+	{
+		rbottom = bboxTop - 5;
+		rleft = (bboxLeft) - 5;
+		rwidth = (bboxRight - bboxLeft) + 5;
+		rheight = (bboxBottom - bboxTop) + 5;
+	}
+	delete image;
+	return foundLine;
 }
 
 /* https://gist.github.com/rdp/9821698 */
@@ -244,13 +237,51 @@ bool ConvertBMPToPNG(const char* bmpFile, const char* pngFile)
 
 /* https://gist.github.com/rdp/9821698 */
 bool ScreenCapture(int x, int y, int width, int height, char* filename) {
+	HDC	sourceDc = GetWindowDC(GetDesktopWindow());
 	HDC hDc = CreateCompatibleDC(0);
-	HBITMAP hBmp = CreateCompatibleBitmap(GetDC(0), width, height);
+	HBITMAP hBmp = CreateCompatibleBitmap(sourceDc, width, height);
 	SelectObject(hDc, hBmp);
-	BitBlt(hDc, 0, 0, width, height, GetDC(0), x, y, SRCCOPY);
+	BitBlt(hDc, 0, 0, width, height, sourceDc, x, y, SRCCOPY);
 	bool ret = SaveBMPFile(filename, hBmp, hDc, width, height);
 	DeleteObject(hBmp);
 	return ret;
+}
+
+bool findDims()
+{
+	rleft = GetSystemMetrics(SM_XVIRTUALSCREEN);
+	rbottom = GetSystemMetrics(SM_YVIRTUALSCREEN);
+	rwidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+	rheight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+	struct TempPaths
+	{
+		~TempPaths()
+		{
+			std::filesystem::remove_all(tmpDir);
+		}
+		std::filesystem::path tmpDir;
+		std::filesystem::path bmpFile;
+		std::filesystem::path pngFile;
+		std::filesystem::path procFile;
+	};
+	badRecCount++;
+	TempPaths workingImages;
+	workingImages.tmpDir = std::filesystem::temp_directory_path();
+	workingImages.tmpDir /= "WOWQueueCamper";
+	std::filesystem::create_directory(workingImages.tmpDir);
+	workingImages.bmpFile = workingImages.tmpDir;
+	workingImages.bmpFile /= "color.bmp";
+	workingImages.pngFile = workingImages.tmpDir;
+	workingImages.pngFile /= "color.png";
+	workingImages.procFile = workingImages.tmpDir;
+	workingImages.procFile /= "bw.png";
+	if (!ScreenCapture(rleft, rbottom, rwidth, rheight, strdup(workingImages.bmpFile.string().c_str())))
+		return false;
+	if (!ConvertBMPToPNG(workingImages.bmpFile.string().c_str(), workingImages.pngFile.string().c_str()))
+		return false;
+	if (!tesseract_preprocess(workingImages.pngFile.string(), workingImages.procFile.string()))
+		return false;
+	return tesseract_ocr_get_line(workingImages.procFile.string());
 }
 
 bool checkScreen(int x, int y, int width, int height)
@@ -285,7 +316,7 @@ bool checkScreen(int x, int y, int width, int height)
 	{
 		return false;
 	}
-	std::string ocr_result = tesseract_ocr(workingImages.procFile.string());
+	std::string ocr_result = tesseract_ocr_get_queue(workingImages.procFile.string());
 	int queueNo = INT_MAX;
 	try
 	{
@@ -386,6 +417,15 @@ int main(int argc, const char* argv[])
 	}
 	Sleep(startDelayMS);
 	std::cout << "Starting the WOWQueueCamper! Waiting for queue to reach " << alarmQueue << std::endl;
+	HMODULE hModule = GetModuleHandleW(NULL);
+	WCHAR path[MAX_PATH];
+	GetModuleFileNameW(hModule, path, MAX_PATH);
+	char exePath[MAX_PATH];
+	wcstombs(exePath, path, MAX_PATH);
+	std::filesystem::path tessDataPath(exePath);
+	tessDataPath = tessDataPath.parent_path();
+	tessDataPath /= "tessdata";
+	api->Init(tessDataPath.string().c_str(), "eng");
 	if (vm.count("rleft") && vm.count("rbottom") && vm.count("rwidth") && vm.count("rheight"))
 	{
 		rleft = vm["rleft"].as<int>();
@@ -395,20 +435,13 @@ int main(int argc, const char* argv[])
 	}
 	else
 	{
-		RECT screenRect;
-		const HWND hDesktop = GetDesktopWindow();
-		GetWindowRect(hDesktop, &screenRect);
-		int width = screenRect.right;
-		int height = screenRect.bottom;
-		rleft = .539 * width;
-		rbottom = .455 * height;
-		rwidth = (.578 * width) - rleft;
-		rheight = (.483 * height) - rbottom;
+		findDims();
 	}
 	while (!checkScreen(rleft, rbottom, rwidth, rheight) && badRecCount < badRecFail)
 	{
 		Sleep(checkDelayMS);
 	}
 	PlaySound(alarmPath.c_str(), NULL, SND_SYNC);
+	delete api;
     return 0;
 }
