@@ -45,7 +45,7 @@ Options:
   
 rleft, rbottom, rwidth, and rheight are used together to set a custom rectangle to find the queue number in. This program defaults to 1920x1080 resolution where WOW is fullscreened. I suggest using an image manipulation program, like https://www.gimp.org/ to figure out what rectangle that you need.
 
-The current binary release is https://github.com/greenbrettmichael/WOWQueueCamper/releases/download/0.1/x64-binaries.zip if you simply want to use the tool and get going!
+The current binary release is https://github.com/greenbrettmichael/WOWQueueCamper/releases/download/0.2/x64-binaries.zip if you simply want to use the tool and get going!
 
 # Compiling From Source
 So you want to compile from source huh? Take this handy guide with you!
